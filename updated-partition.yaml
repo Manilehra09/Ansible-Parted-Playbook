@@ -1,0 +1,81 @@
+- name: Create partition
+  hosts: balancer
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Debug available disks
+      debug:
+        var: ansible_devices
+    - name: Debug available disks
+      debug:
+        msg: " Disks vdd is not available" 
+      when: "'vdd' not in ansible_devices"
+
+    - name: Create 1500M partition on nvme0n2 if >= 1.5 GB
+      parted:
+        device: /dev/nvme0n2
+        number: 1
+        state: present
+        part_end: 1500MiB
+      when: "'nvme0n2' in ansible_devices and (ansible_devices['nvme0n2'].size | regex_replace(' GB','') | float >= 1.5)"
+
+    - name: Create 800M partition on nvme0n2 if < 1.5 GB
+      parted:
+        device: /dev/nvme0n2
+        number: 1
+        state: present
+        part_end: 800MiB
+      when: "'nvme0n2' in ansible_devices and (ansible_devices['nvme0n2'].size | regex_replace(' GB','') | float < 1.5)"
+
+    - name: Create 1500M partition on nvme0n3 if >= 1.5 GB
+      parted:
+        device: /dev/nvme0n3
+        number: 1
+        state: present
+        part_end: 1500MiB
+      when: "'nvme0n3' in ansible_devices and (ansible_devices['nvme0n3'].size | regex_replace(' GB','') | float >= 1.5)"
+
+    - name: Create 800M partition on nvme0n3 if < 1.5 GB
+      parted:
+        device: /dev/nvme0n3
+        number: 1
+        state: present
+        part_end: 800MiB
+      when: "'nvme0n3' in ansible_devices and (ansible_devices['nvme0n3'].size | regex_replace(' GB','') | float < 1.5)"
+
+    - name: Create filesystem for nvme0n2p1
+      filesystem:
+        device: /dev/nvme0n2p1
+        fstype: ext4
+      when: "'nvme0n2' in ansible_devices and 'nvme0n2p1' in ansible_devices['nvme0n2'].partitions"
+
+    - name: Create filesystem for nvme0n3p1
+      filesystem:
+        device: /dev/nvme0n3p1
+        fstype: ext4
+      when: "'nvme0n3' in ansible_devices and 'nvme0n3p1' in ansible_devices['nvme0n3'].partitions"
+
+    - name: Create mount directories
+      file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - /newpart
+        - /newpart1
+
+    - name: Mount nvme0n2p1
+      mount:
+        src: /dev/nvme0n2p1
+        path: /newpart
+        fstype: ext4
+        state: mounted
+      when: "'nvme0n2p1' in ansible_devices['nvme0n2'].partitions"
+
+    - name: Mount nvme0n3p1
+      mount:
+        src: /dev/nvme0n3p1
+        path: /newpart1
+        fstype: ext4
+        state: mounted
+      when: "'nvme0n3' in ansible_devices and 'nvme0n3p1' in ansible_devices['nvme0n3'].partitions"
